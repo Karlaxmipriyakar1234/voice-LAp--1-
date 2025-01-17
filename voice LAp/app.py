@@ -111,4 +111,4 @@ def apply_leave():
         return jsonify({"message": "An error occurred while submitting the application."}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)
