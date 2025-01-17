@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Managerial Leave Review</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 50px auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        button {
+            padding: 5px 10px;
+            border-radius: 5px;
+            background-color: #28a745;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .reject-btn {
+            background-color: #dc3545;
+        }
+        .reject-btn:hover {
+            background-color: #c82333;
+        }
+        .voice-btn {
+            background-color: #007bff;
+            color: white;
+            border-radius: 50%;
+            border: none;
+            width: 30px;
+            height: 30px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .voice-btn:hover {
+            background-color: #0056b3;
+        }
+        .description-box {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Leave Applications</h1>
+        <table id="applications-table">
+            <thead>
+                <tr>
+                    <th>Employee Name</th>
+                    <th>Leave Type</th>
+                    <th>From Date</th>
+                    <th>To Date</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Leave applications will be dynamically inserted here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function fetchLeaveApplications() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/get_leave_applications');
+                const applications = await response.json();
+
+                const tableBody = document.querySelector('#applications-table tbody');
+                tableBody.innerHTML = '';  // Clear any existing rows
+
+                applications.forEach(application => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${application.employee_name}</td>
+                        <td>${application.leave_type}</td>
+                        <td>${application.from_date}</td>
+                        <td>${application.to_date}</td>
+                        <td>${application.status || 'Pending'}</td>
+                        <td>
+                            <button class="voice-btn" onclick="handleVoiceCommand(${application.id})">🎤</button>
+                            <div class="description-box" id="description-box-${application.id}" style="display: none;">
+                                <textarea placeholder="Enter reason for rejection" id="description-${application.id}" rows="3" style="width: calc(100% - 40px);"></textarea>
+                                <button class="voice-btn" onclick="fillDescription(${application.id})">🎤</button>
+                                <button onclick="submitRejection(${application.id})">Submit</button>
+                            </div>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error fetching leave applications:', error);
+            }
+        }
+
+        function handleVoiceCommand(applicationId) {
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'en-US';
+            recognition.start();
+
+            recognition.onresult = function (event) {
+                const command = event.results[0][0].transcript.toLowerCase();
+                if (command.includes('approve')) {
+                    approveLeave(applicationId);
+                } else if (command.includes('reject')) {
+                    const descriptionBox = document.getElementById(`description-box-${applicationId}`);
+                    descriptionBox.style.display = 'block'; // Show the description box
+                } else {
+                    alert('Command not recognized. Please say "approve" or "reject".');
+                }
+            };
+
+            recognition.onerror = function (event) {
+                alert('Error capturing voice input: ' + event.error);
+            };
+        }
+
+        function fillDescription(applicationId) {
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'en-US';
+            recognition.start();
+
+            recognition.onresult = function (event) {
+                const text = event.results[0][0].transcript;
+                const descriptionBox = document.getElementById(`description-${applicationId}`);
+                descriptionBox.value = text; // Set the value of the description box
+            };
+
+            recognition.onerror = function (event) {
+                alert('Error capturing voice input for description: ' + event.error);
+            };
+        }
+
+        async function approveLeave(id) {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/approve_leave', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ id })
+                });
+
+                const result = await response.json();
+                alert(result.message);  // Show success message
+                fetchLeaveApplications();  // Refresh the table
+            } catch (error) {
+                alert('Error approving leave: ' + error.message);
+            }
+        }
+
+        async function submitRejection(id) {
+            const description = document.getElementById(`description-${id}`).value;
+            if (!description) {
+                alert('Please provide a reason for rejection.');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/reject_leave', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ id, description })
+                });
+
+                const result = await response.json();
+                alert(result.message);  // Show success message
+                fetchLeaveApplications();  // Refresh the table
+            } catch (error) {
+                alert('Error rejecting leave: ' + error.message);
+            }
+        }
+
+        // Fetch leave applications when the page loads
+        fetchLeaveApplications();
+    </script>
+</body>
+</html>
